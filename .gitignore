@@ -1,0 +1,7 @@
+node_modules/
+*.bin
+out/
+/data/
+a.out
+vulnerabilities/*/generate/coldcard_dump
+vulnerabilities/*/generate/illbloom_dump

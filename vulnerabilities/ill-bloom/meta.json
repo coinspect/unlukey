@@ -1,0 +1,6 @@
+{
+  "id": "ill-bloom",
+  "name": "Ill Bloom (CryptoJS WordArray.random weak randomness)",
+  "references": [
+    "https://illbloom.org"  ]
+}

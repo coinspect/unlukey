@@ -1,0 +1,7 @@
+{
+  "id": "coldcard-mk3",
+  "name": "Coldcard Mk2/Mk3 (Yasmarang weak seed)",
+  "references": [
+    "https://blog.coinkite.com/coldcard-mk3-seed-generation-warning/"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "unlukey",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "upgradePackages": true
+    }
+  },
+
+  // build-essential (gcc/make, brings libgomp for -fopenmp) for vulnerabilities/*/generate/*.c
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential && sudo rm -rf /var/lib/apt/lists/*",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.cpptools"
+      ],
+      "settings": {
+        "files.associations": { "*.mjs": "javascript" }
+      }
+    }
+  },
+
+  "remoteUser": "node"
+}

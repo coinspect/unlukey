@@ -1,0 +1,151 @@
+# Unlukey
+
+Unlukey is a public, reproducible research project on weak seed-generation vulnerabilities in cryptocurrency wallets. 
+
+It provides reproducible generators for known vulnerabilities and datasets that wallets can use to identify affected recovery phrases.
+
+## How it works
+
+For each known vulnerability, Unlukey generates the possible entropy values, hashes them, and stores the resulting keys in a dataset.
+
+The wallet derives the BIP-39 entropy, hashes it, and checks the resulting key against the dataset.
+
+## Lookup
+
+The Unlukey client:
+
+1. Computes `key = SHA-256(entropy)`.
+2. Sends only a prefix of the key to static hosting.
+3. Downloads the corresponding bucket.
+4. Compares the remaining part of the key locally.
+5. Returns `vulnerable` or `not-found`.
+
+The prefix groups many possible keys into the same bucket, providing k-anonymity. The server cannot determine the full key being checked or whether it matches.
+
+## Datasets
+
+Datasets are separated by entropy length: one for 128-bit entropy and one for 256-bit entropy.
+
+All vulnerabilities producing the same entropy length share a dataset.
+
+The client uses the datasets provided by Unlukey by default. They can also be regenerated using the included generators and tools.
+
+## Building the dataset
+
+Each vulnerability generator enumerates its weak-seed search space and computes `SHA-256(entropy)`.
+
+The hashes are processed in two stages:
+
+* `bucket_partition` splits the hash stream into shard files.
+* `bucket_finalize` builds the final prefix buckets from those shards.
+
+### Prefix bits
+
+The prefix determines which bucket contains a key and controls the size of the k-anonymity set.
+
+A longer prefix creates more buckets with fewer keys per bucket. This reduces the amount of data downloaded per lookup, but also reduces the anonymity set.
+
+A shorter prefix creates larger buckets with more keys, providing more anonymity at the cost of downloading more data.
+
+The prefix is chosen per dataset based on its size, targeting a consistent anonymity set across vulnerabilities with different numbers of keys.
+
+### Stored suffix bytes
+
+After the prefix, the dataset stores part of the remaining hash. Fewer bytes make the dataset smaller, but increase the chance of false positives.
+
+This is a trade-off between **dataset size and lookup accuracy**.
+
+By default, the complete remaining hash is stored, giving zero false positives.
+
+Both `prefix-bits` and `keep-bytes` are configured in [`datasets/build/bucket_finalize.c`](datasets/build/bucket_finalize.c) and must match `DATASET_CONFIG` in [`client/index.js`](client/index.js).
+
+## Why entropy?
+
+Unlukey uses BIP-39 entropy as the lookup input and hashes it with SHA-256.
+
+* **Language-agnostic.** The same entropy can be encoded using different BIP-39 wordlists. Hashing the entropy gives one key regardless of mnemonic language.
+* **Path and network-agnostic.** The weakness belongs to the seed itself, so one key covers accounts, derivation paths, address types, and supported coins derived from it.
+* **No on-chain activity required.** Unlukey does not rely on previously observed on-chain activity to identify vulnerable seeds.
+
+---
+# Try it
+
+## 1. Remote check
+
+Check an entropy against the published datasets:
+
+```bash
+node client/cli.js --remote 72039ecb02a3c880d4249e4b206933945a4f3a76ebaab26fa14e47a24e0f907e
+# VULNERABLE
+```
+
+## 2. Wallet integration
+
+```js
+import { check } from './client/index.js';
+
+const entropy = mnemonicToEntropy(
+  secretRecoveryPhrase,
+  wordlist
+);
+
+const { vulnerable } = await check(entropy);
+```
+
+`entropy` must contain either:
+
+* 16 bytes for 12-word mnemonics, or
+* 32 bytes for 24-word mnemonics.
+
+The client automatically selects the appropriate dataset based on entropy length.
+
+## 3. Build the tools
+
+```bash
+cc -O3 -o illbloom_dump \
+  vulnerabilities/ill-bloom/generate/illbloom_dump.c
+
+cc -O3 -o coldcard_dump \
+  vulnerabilities/coldcard/generate/coldcard_dump.c
+
+cc -O3 -o bucket_partition \
+  datasets/build/bucket_partition.c
+
+cc -O3 -o bucket_finalize \
+  datasets/build/bucket_finalize.c
+```
+
+## 4. Generate a sample
+
+Running a generator with no arguments enumerates its **entire** search space (terabytes, for these vulnerabilities). Pass a small range instead for testing:
+
+```bash
+./illbloom_dump 0 2 illbloom_sample.bin
+./coldcard_dump 0 2 3 0 coldcard_sample.bin normal
+```
+
+See each vulnerability's `README.md` for the full generator options.
+
+## 5. Build the dataset
+
+```bash
+./bucket_partition 8 shards128 illbloom_sample.bin
+./bucket_finalize shards128 datasets/128 20
+
+./bucket_partition 8 shards256 coldcard_sample.bin
+./bucket_finalize shards256 datasets/256 19
+```
+
+The third argument to `bucket_finalize` is the prefix length in bits. The value is chosen per dataset (see [Prefix bits](#prefix-bits))
+
+## 6. Local CLI
+
+`client/cli.js` can test against a locally generated dataset:
+
+```bash
+node client/cli.js 7123000046089b516efdc72c6af30279
+# VULNERABLE
+
+node client/cli.js 00112233445566778899aabbccddeeff
+# NOT FOUND
+```
